@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" href="/new_logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kumo – Search beyond every paywall</title>
+    <meta name="description" content="Search research papers by DOI, title, or author. Search beyond every paywall." />
+    <meta name="author" content="Kumo" />
+    <meta name="theme-color" content="#0ea5e9" />
+
+    <meta property="og:title" content="Kumo – Search beyond every paywall" />
+    <meta property="og:description" content="Search research papers by DOI, title, or author. Search beyond every paywall." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://kumo.saishankar.xyz" />
+    <meta property="og:site_name" content="Kumo" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Kumo – Search beyond every paywall" />
+    <meta name="twitter:description" content="Search research papers by DOI, title, or author. Search beyond every paywall." />
+
+    <link rel="canonical" href="https://kumo.saishankar.xyz/" />
+    <link rel="alternate" href="https://kumo.saishankar.xyz/" hreflang="en" />
+    <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+    <link rel="preload" as="style" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Kumo",
+      "url": "https://kumo.saishankar.xyz",
+      "description": "Search research papers by DOI, title, or author. Search beyond every paywall.",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://kumo.saishankar.xyz/search?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Kumo",
+      "url": "https://kumo.saishankar.xyz",
+      "description": "Open research engine for finding and reading academic papers.",
+      "sameAs": [
+        "https://github.com/saishankar404/kumo"
+      ]
+    }
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script>
+      (function() {
+        var script = document.createElement('script');
+        script.src = 'https://us-assets.i.posthog.com/static/array.js';
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
