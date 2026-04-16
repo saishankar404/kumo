@@ -12,6 +12,7 @@ import SearchPage from "./pages/SearchPage.tsx";
 import InternalMetrics from "./pages/InternalMetrics.tsx";
 import About from "./pages/About.tsx";
 import { initPostHog, capturePageView } from "./lib/posthog-client";
+import TypewriterLoader from "./components/TypewriterLoader";
 
 const queryClient = new QueryClient();
 
@@ -97,6 +98,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <TypewriterLoader />
       <BrowserRouter>
         <RouteTransitionLayer />
       </BrowserRouter>

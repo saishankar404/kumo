@@ -453,6 +453,8 @@ const Index = () => {
   const prevHadQuery = useRef(false);
   const transitionLockRef = useRef(false);
   const toggleLockRef = useRef(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoReady, setVideoReady] = useState(false);
 
   // Respect reduced motion preference (a11y-reduced-motion-check)
   const prefersReducedMotion = useReducedMotion() ?? false;
@@ -533,6 +535,19 @@ const Index = () => {
 
     return () => clearInterval(interval);
   }, [isDialogOpen]);
+
+  // Start video when ready (triggered by loader)
+  useEffect(() => {
+    if (videoReady && videoRef.current) {
+      videoRef.current.play().catch(() => {});
+    }
+  }, [videoReady]);
+
+  // Dispatch video ready event for loader
+  const handleVideoCanPlay = useCallback(() => {
+    setVideoReady(true);
+    window.dispatchEvent(new CustomEvent("kumo-video-ready"));
+  }, []);
 
   // Focus dialog input when opened
   useEffect(() => {
@@ -675,13 +690,15 @@ const Index = () => {
     <div id="main-content" className="relative flex h-[100dvh] flex-col overflow-hidden">
       {/* Background Video */}
       <video
-        autoPlay
+        ref={videoRef}
         loop
         muted
         playsInline
-        preload="none"
+        webkit-playsinline="true"
+        preload="auto"
         poster="/about_bg.png"
         className="absolute inset-0 h-full w-full object-cover"
+        onCanPlayThrough={handleVideoCanPlay}
       >
         <source src="/bg-anim.mp4" type="video/mp4" />
       </video>
