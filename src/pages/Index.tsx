@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Search01Icon, Cancel01Icon, InformationCircleIcon, GithubIcon, CommandIcon, ClipboardIcon } from "@hugeicons/core-free-icons";
+import { Search01Icon, Cancel01Icon, InformationCircleIcon, GithubIcon, CommandIcon, ClipboardIcon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { motion, AnimatePresence, useReducedMotion, LayoutGroup } from "framer-motion";
 import StackedCardLoop from "@/components/StackedCardLoop";
 import { captureHeroSearchSubmit } from "@/lib/posthog-client";
@@ -595,6 +595,8 @@ const Index = () => {
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
+      inlineInputRef.current?.blur();
+      dialogInputRef.current?.blur();
       playClickSound(prefersReducedMotion);
       captureHeroSearchSubmit(query.trim());
       navigate(`/search?q=${encodeURIComponent(query.trim())}`);
@@ -1000,7 +1002,25 @@ const Index = () => {
                     style={{ fontFamily: fontStack, letterSpacing: "-0.01em" }}
                   />
 
-                  <div className="pointer-events-none absolute right-5 top-0 h-full z-10 flex items-center pr-5">
+                  <div className="pointer-events-none absolute right-5 top-0 h-full z-10 flex items-center pr-5 md:hidden">
+                    {query ? (
+                      <motion.button
+                        type="submit"
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        whileTap={{ scale: 0.9 }}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-900 text-white shadow-lg"
+                      >
+                        <HugeiconsIcon icon={ArrowRight01Icon} size={18} strokeWidth={2.5} />
+                      </motion.button>
+                    ) : (
+                      <div className="flex items-center gap-1 rounded-md bg-neutral-900/[0.07] px-2.5 h-7">
+                        <HugeiconsIcon icon={Search01Icon} size={14} strokeWidth={2} className="text-neutral-500" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pointer-events-none absolute right-5 top-0 h-full z-10 hidden items-center pr-5 md:flex">
                     <div className="flex items-center gap-1 rounded-md bg-neutral-900/[0.07] px-2.5 h-7">
                       <HugeiconsIcon icon={CommandIcon} size={12} strokeWidth={2.25} className="text-neutral-600" />
                       <span className="text-[12px] font-semibold leading-none text-neutral-600" style={{ fontFamily: fontStack }}>
