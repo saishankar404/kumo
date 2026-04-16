@@ -277,9 +277,9 @@ export default function MobileNav({
 
           <div className="border-t border-gray-100 p-5">
             <div className="text-[11px] font-medium leading-relaxed text-gray-400 opacity-70">
-              Long live the grain.
+              search beyond every paywall.
               <br />
-              © MMXXIV Kumo.
+              2026 @ <a href="https://github.com/saishankar404/kumo" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600 transition-colors">Kumo</a>.
             </div>
           </div>
         </div>

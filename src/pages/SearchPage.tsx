@@ -1986,8 +1986,9 @@ const openAccessOnly = isOpenAccessOnly(state);
 
               {/* Footer */}
               <div className="pt-6 text-[11px] font-medium leading-relaxed text-gray-400 opacity-70 px-1">
-                Long live the grain.
-                <br />© MMXXIV Kumo.
+                search beyond every paywall.
+                <br />
+                2026 @ <a href="https://github.com/saishankar404/kumo" target="_blank" rel="noopener noreferrer" className="hover:text-gray-900 transition-colors">Kumo</a>.
               </div>
             </div>
           </div>
@@ -2146,7 +2147,9 @@ const openAccessOnly = isOpenAccessOnly(state);
                   <>
                     {" "}for <span className="font-bold text-gray-900">"{state.q.trim()}"</span>
                     {!loading && firstResultMs && (
-                      <> · <span className="font-bold text-green-600">{firstResultMs}ms</span></>
+                      <> · <span className="font-bold text-green-600">
+                        {firstResultMs < 500 ? `${firstResultMs}ms` : `${(firstResultMs / 1000).toFixed(1)}s`}
+                      </span></>
                     )}
                   </>
                 ) : (

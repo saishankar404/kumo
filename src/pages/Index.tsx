@@ -6,23 +6,8 @@ import { motion, AnimatePresence, useReducedMotion, LayoutGroup } from "framer-m
 import StackedCardLoop from "@/components/StackedCardLoop";
 import { captureHeroSearchSubmit } from "@/lib/posthog-client";
 
-// =============================================================================
-// ANIMATION PRINCIPLES APPLIED:
-// 1. Squash & Stretch - Subtle scale deformation on button presses (0.95-1.05)
-// 2. Anticipation - Slight scale down before actions, wind-up effects
-// 3. Staging - One focal animation at a time, proper z-index hierarchy
-// 4. Straight Ahead/Pose to Pose - Keyframe sequences for entrances
-// 5. Follow Through & Overlapping - Staggered delays, overshoot with springs
-// 6. Slow In/Slow Out - Ease-out for entrances, ease-in for exits
-// 7. Arc - Curved motion paths where natural
-// 8. Secondary Action - Shadow/glow changes supporting primary motion
-// 9. Timing - Under 300ms for interactions, proper duration hierarchy
-// 10. Exaggeration - Emphasized but not excessive movements
-// 11. Solid Drawing - Consistent shadows, visual weight
-// 12. Appeal - Polished, delightful character
-// =============================================================================
 
-// Shared spring configs for consistent physics (Principle 9: Timing consistency)
+// Shared spring configs for consistent physics (Timing consistency)
 const springs = {
   // Snappy for interactions - under 200ms effective duration
   snappy: { type: "spring" as const, stiffness: 500, damping: 30, mass: 0.8 },
@@ -34,7 +19,7 @@ const springs = {
   gentle: { type: "spring" as const, stiffness: 200, damping: 20, mass: 0.8 },
 };
 
-// Easing curves following principles (Principle 6: Slow In/Slow Out)
+// Easing curves following principles (Slow In/Slow Out)
 const easings = {
   // Ease-out for entrances - fast start, gentle settle
   entrance: [0.22, 1, 0.36, 1] as [number, number, number, number],
@@ -44,10 +29,7 @@ const easings = {
   transition: [0.4, 0, 0.2, 1] as [number, number, number, number],
 };
 
-// =============================================================================
-// PLACEHOLDER EXAMPLES FOR CALLIGRAPH
-// Cycles through DOIs, paper titles, author names, keywords
-// =============================================================================
+
 
 const PLACEHOLDER_EXAMPLES = [
   "10.1038/nature12373",
@@ -79,13 +61,7 @@ const INLINE_RESULTS: InlineResult[] = [
   { type: "keyword", primary: "CRISPR gene editing", secondary: "Keyword · biotechnology" },
 ];
 
-// =============================================================================
-// SOUND SYNTHESIS (Following audio rules)
-// - context-reuse-single: Single AudioContext
-// - envelope-exponential-decay: Natural decay curves
-// - param-click-duration: 5-15ms for clicks
-// - a11y-reduced-motion-check: Respect user preferences
-// =============================================================================
+
 
 let audioContext: AudioContext | null = null;
 const soundLastPlayed = {
@@ -285,11 +261,7 @@ function playCloseSound(prefersReducedMotion: boolean) {
   } catch { /* no-op */ }
 }
 
-// =============================================================================
-// ANIMATION VARIANTS (Principle 4: Pose to Pose)
-// =============================================================================
-
-// Staggered children for hero text (Principle 5: Follow Through & Overlapping)
+// Staggered children for hero text (Follow Through & Overlapping)
 const heroContainerVariants = {
   hidden: {},
   visible: {
@@ -441,9 +413,6 @@ const morphSpring = {
   mass: 1,
 };
 
-// =============================================================================
-// FONT STACK CONSTANT
-// =============================================================================
 const fontStack = "'GT Walsheim Pro', 'Satoshi', system-ui, -apple-system, sans-serif";
 
 const HERO_TITLES = [
@@ -453,9 +422,6 @@ const HERO_TITLES = [
   ["Open science", "for everyone."],
 ];
 
-// =============================================================================
-// BUTTON INTERACTION VARIANTS (Principles 1, 2, 10: Squash/Stretch, Anticipation, Exaggeration)
-// =============================================================================
 
 // Subtle squash on press, stretch on release (Principle 1: Squash & Stretch)
 const buttonTapVariants = {
@@ -471,10 +437,6 @@ const buttonTapVariants = {
     boxShadow: "0 20px 40px -12px rgba(0, 0, 0, 0.25)",
   },
 };
-
-// =============================================================================
-// MAIN COMPONENT
-// =============================================================================
 
 const Index = () => {
   const navigate = useNavigate();
@@ -744,8 +706,8 @@ const Index = () => {
             whileTap={prefersReducedMotion ? {} : { scale: 0.95 }}
             transition={springs.snappy}
           >
-            <img 
-              src="/new_logo_no_bg.png" 
+            <img
+              src="/new_logo_no_bg.png"
               alt="Kumo"
               className="h-32 w-auto object-contain"
             />
@@ -806,8 +768,8 @@ const Index = () => {
             whileTap={prefersReducedMotion ? {} : { scale: 0.95 }}
             transition={springs.snappy}
           >
-            <img 
-              src="/new_logo_no_bg.png" 
+            <img
+              src="/new_logo_no_bg.png"
               alt="Kumo"
               className="h-16 w-auto object-contain"
             />
@@ -1104,21 +1066,28 @@ const Index = () => {
           </motion.div>
         </div>
 
-        {/* Footer (Principle 3: Staging - last to appear) */}
+        {/* Footer (Staging - last to appear) */}
         <motion.footer
-          className="pointer-events-none absolute bottom-4 left-1/2 z-30 -translate-x-1/2 text-center"
+          className="absolute bottom-4 left-1/2 z-30 -translate-x-1/2 text-center"
           variants={footerVariants}
           initial="hidden"
           animate="visible"
           {...animationProps}
         >
           <motion.span
-            className="text-xs font-medium tracking-wide text-white/40"
+            className="text-sm font-medium tracking-wide text-white/40"
             style={{ fontFamily: fontStack }}
             whileHover={prefersReducedMotion ? {} : { color: "rgba(255,255,255,0.7)" }}
             transition={{ duration: 0.2 }}
           >
-            crafted by @saishankar404
+            <a
+              href="https://www.linkedin.com/in/sai-shankar101/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[1.1em] transition-all duration-300 hover:text-amber-500 hover:scale-105 inline-block"
+            >
+              crafted by @saishankar404
+            </a>
           </motion.span>
         </motion.footer>
 
@@ -1153,8 +1122,8 @@ const Index = () => {
                   }
                 }}
               >
-                <div 
-                  className="w-full max-w-3xl px-6" 
+                <div
+                  className="w-full max-w-3xl px-6"
                 >
                   <motion.div
                     layoutId="search-shell"
