@@ -1,52 +1,42 @@
-# Kumo
+# kumo
 
-## Production Verification
+welcome to kumo. this is an open source platform built to make academic paper exploration feel natural and tactile. we wanted to build something that moves away from the static, overwhelming lists of traditional search engines and toward a spatial library experience.
 
-- `npm run verify:prod`
-  - runs lint, unit tests, production build, and bundle-budget checks
-- `npm run test:e2e`
-  - runs Playwright end-to-end tests for:
-    - search -> open PDF flow
-    - collections + bookmarks + bulk BibTeX export
-    - dead PDF link session metric behavior
-- `npm run smoke:staging`
-  - run smoke checks against a deployed environment:
-  - `STAGING_URL=https://your-staging.example.com npm run smoke:staging`
+## what is it?
 
-## API Security and Abuse Controls
+kumo acts as a gateway to the world of research. it connects natively with open access sources like arxiv and openalex, presenting papers as interactive stacks and grids. it prioritize motion, typography, and a "physical" feel to help you organize your knowledge vault without the friction.
 
-- Shared API guardrails now apply to `/api/*` handlers:
-  - method enforcement (`GET` only for search/proxy endpoints)
-  - strict input validation (query length, DOI format, URL parsing)
-  - host/protocol allowlisting for upstream proxy routes
-  - no-store caching on error responses
-  - security headers (`X-Content-Type-Options`, `Referrer-Policy`, `Cross-Origin-Resource-Policy`)
-  - token-bucket rate limiting with `429` + `Retry-After`
+## features
 
-- Environment flags:
-  - `RATE_LIMIT_MODE=off|soft|enforce`
-  - `STRICT_ORIGIN_CHECK=true|false`
-  - `ALLOWED_ORIGINS=<comma-separated origins>`
+- browse millions of papers through integrated open access apis.
+- spatial dashboard layout with masonry grids and fluid transitions.
+- efficient local caching and smart edge filtering for speed.
+- minimalist design crafted with satoshi and gt walsheim typography.
+- built-in security layers to handle rate limiting and origin protection.
 
-- Security regression tests:
-  - `npm test -- src/test/api-security.test.ts`
+## getting started
 
-### Vercel Edge status
+you can get kumo running locally in just a few minutes. make sure you have pnpm installed on your machine.
 
-- A lightweight `middleware.ts` edge prefilter now blocks obvious UA/path anomalies for `/api/*` before handlers run.
-- Authoritative validation/rate limiting still remains in API handlers to avoid bypass and keep behavior consistent across environments.
-- If you later enable Cloudflare proxy or allow shared infra (Redis/KV), add global edge counters/rate limits as a first layer.
+1. clone the repository:
+   `git clone https://github.com/saishankar404/kumo-new.git`
+2. enter the project directory:
+   `cd kumo-new`
+3. install the dependencies:
+   `pnpm install`
+4. set up your environment variables:
+   `cp .env.example .env`
+5. run the development server:
+   `pnpm run dev`
 
-## Bundle Budget
+then just open `localhost:5173` in your browser.
 
-Bundle budgets are enforced by `scripts/check-bundle-budget.mjs`.
+## contributing
 
-Defaults:
-- main JS raw: `750000` bytes
-- main JS gzip: `245000` bytes
-- main CSS raw: `130000` bytes
+we love seeing new ideas and bug fixes. if you want to help out, check out our contributing guide. we keep our code style light and readable, and we always appreciate a thoughtful pull request.
 
-Override with env vars:
-- `BUDGET_MAIN_JS_BYTES`
-- `BUDGET_MAIN_JS_GZIP_BYTES`
-- `BUDGET_CSS_BYTES`
+## license
+
+this project is licensed under the mit license. check the license file for the full legal text.
+
+enjoy kumo.
