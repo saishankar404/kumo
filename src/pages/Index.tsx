@@ -1205,12 +1205,12 @@ const Index = () => {
                             className="absolute inset-y-0 right-3 z-10 flex items-center md:hidden"
                           >
                             <motion.button
-                              type="submit"
+                              type="button"
                               whileTap={{ scale: 0.9 }}
                               className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white shadow-lg"
                               onClick={() => {
-                                inlineInputRef.current?.blur();
-                                dialogInputRef.current?.blur();
+                                const form = dialogInputRef.current?.closest('form');
+                                if (form) form.requestSubmit();
                               }}
                             >
                               <HugeiconsIcon icon={ArrowRight01Icon} size={18} strokeWidth={2.5} />
