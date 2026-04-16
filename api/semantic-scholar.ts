@@ -1,26 +1,27 @@
 import { createPostHogClient } from "./posthog";
 import {
-  type ApiRequest,
-  type ApiResponse,
   enforceOriginCheck,
   enforceRateLimit,
-  getSingle,
+  getSecurityHeaders,
   requireGet,
   requireQueryParam,
-  sendError,
-  setSecurityHeaders,
+  sendErrorResponse,
 } from "./_security";
 
-export default async function handler(req: ApiRequest, res: ApiResponse) {
-  if (!requireGet(req, res)) return;
-  if (!enforceOriginCheck(req, res)) return;
-  if (!enforceRateLimit(req, res, "search")) return;
-  setSecurityHeaders(res);
+export const config = {
+  runtime: "edge",
+};
 
-  const query = requireQueryParam(req, res, "query", { minLen: 2, maxLen: 400 });
-  if (!query) return;
+export default async function handler(req: Request): Promise<Response> {
+  const errorRes = requireGet(req) || enforceOriginCheck(req) || enforceRateLimit(req, "search");
+  if (errorRes) return errorRes;
 
-  const distinctId = getSingle(req.headers?.["x-posthog-distinct-id"]) ?? "anonymous";
+  const url = new URL(req.url);
+  const { value: query, error: queryError } = requireQueryParam(url, "query", { minLen: 2, maxLen: 400 });
+  if (queryError) return queryError;
+  if (!query) return sendErrorResponse(400, "invalid_request", "Missing query");
+
+  const distinctId = req.headers.get("x-posthog-distinct-id") ?? "anonymous";
   const posthog = createPostHogClient();
 
   const endpoint = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=15&fields=title,abstract,year,venue,citationCount,openAccessPdf,externalIds,authors,url`;
@@ -30,8 +31,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const text = await upstream.text();
 
     if (!upstream.ok) {
-      sendError(res, upstream.status, "Upstream semantic-scholar error", text.slice(0, 400));
-      await posthog.captureImmediate({
+      const resp = sendErrorResponse(upstream.status, "Upstream semantic-scholar error", text.slice(0, 400));
+      posthog.captureImmediate({
         distinctId,
         event: "api_search_error",
         properties: {
@@ -40,15 +41,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           status_code: upstream.status,
         },
       });
-      await posthog.shutdown();
-      return;
+      return resp;
     }
 
     const data = JSON.parse(text) as { total?: number; data?: unknown[] };
-    setSecurityHeaders(res);
-    res.setHeader("Cache-Control", "public, s-maxage=900, stale-while-revalidate=3600");
-    res.status(200).json(data);
-    await posthog.captureImmediate({
+    const headers = getSecurityHeaders();
+    headers.set("Cache-Control", "public, s-maxage=900, stale-while-revalidate=3600");
+    
+    posthog.captureImmediate({
       distinctId,
       event: "api_search_requested",
       properties: {
@@ -57,10 +57,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         result_count: data.total ?? data.data?.length ?? 0,
       },
     });
+
+    return new Response(JSON.stringify(data), { status: 200, headers });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    sendError(res, 502, "Failed to resolve Semantic Scholar", message);
     posthog.captureException(error, distinctId, { source: "semantic-scholar", query });
+    return sendErrorResponse(502, "Failed to resolve Semantic Scholar", message);
   }
-  await posthog.shutdown();
 }

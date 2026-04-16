@@ -1,48 +1,49 @@
 import { createPostHogClient } from "./posthog";
 import {
-  type ApiRequest,
-  type ApiResponse,
   assertPublicHostname,
   enforceOriginCheck,
   enforceRateLimit,
-  getSingle,
+  getSecurityHeaders,
   parseAndValidateUrl,
   requireGet,
   requireQueryParam,
-  sendError,
-  setSecurityHeaders,
+  sendErrorResponse,
 } from "./_security";
 
-export default async function handler(req: ApiRequest, res: ApiResponse) {
-  if (!requireGet(req, res)) return;
-  if (!enforceOriginCheck(req, res)) return;
-  if (!enforceRateLimit(req, res, "linkCheck")) return;
-  setSecurityHeaders(res);
+export const config = {
+  runtime: "edge",
+};
 
-  const urlParam = requireQueryParam(req, res, "url", { maxLen: 2000 });
-  if (!urlParam) return;
+export default async function handler(req: Request): Promise<Response> {
+  const errorRes = requireGet(req) || enforceOriginCheck(req) || enforceRateLimit(req, "linkCheck");
+  if (errorRes) return errorRes;
+
+  const url = new URL(req.url);
+  const { value: urlParam, error: queryError } = requireQueryParam(url, "url", { maxLen: 2000 });
+  if (queryError) return queryError;
+  if (!urlParam) return sendErrorResponse(400, "invalid_request", "Missing url");
+
   let parsed: URL;
   try {
     parsed = new URL(urlParam);
   } catch {
-    sendError(res, 400, "invalid_request", "Invalid url");
-    return;
-  }
-  const target = parseAndValidateUrl(urlParam, [parsed.hostname]);
-  if (!target) {
-    sendError(res, 400, "invalid_request", "Invalid url");
-    return;
-  }
-  if (!(await assertPublicHostname(target.hostname))) {
-    sendError(res, 400, "invalid_request", "Forbidden host");
-    return;
+    return sendErrorResponse(400, "invalid_request", "Invalid url");
   }
 
-  const distinctId = getSingle(req.headers?.["x-posthog-distinct-id"]) ?? "anonymous";
+  const target = parseAndValidateUrl(urlParam, [parsed.hostname]);
+  if (!target) {
+    return sendErrorResponse(400, "invalid_request", "Invalid or forbidden url");
+  }
+
+  if (!(await assertPublicHostname(target.hostname))) {
+    return sendErrorResponse(400, "invalid_request", "Forbidden host");
+  }
+
+  const distinctId = req.headers.get("x-posthog-distinct-id") ?? "anonymous";
   const posthog = createPostHogClient();
 
   try {
-    const upstream = await fetch(target.toString(), {
+    let upstream = await fetch(target.toString(), {
       method: "HEAD",
       redirect: "manual",
     });
@@ -58,24 +59,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (upstream.status >= 300 && upstream.status < 400 && upstream.headers.has("location")) {
       const redirectUrl = new URL(upstream.headers.get("location")!, target);
       if (!(await assertPublicHostname(redirectUrl.hostname))) {
-        sendError(res, 400, "invalid_request", "Forbidden redirect host");
-        await posthog.captureImmediate({
+        const errResp = sendErrorResponse(400, "invalid_request", "Forbidden redirect host");
+        posthog.captureImmediate({
           distinctId,
           event: "api_link_check_error",
           properties: { url: urlParam, error: "Forbidden redirect host" },
         });
-        await posthog.shutdown();
-        return;
+        return errResp;
       }
-    }
-      sendError(res, 400, "invalid_request", "Forbidden redirect host");
-      await posthog.captureImmediate({
-        distinctId,
-        event: "api_link_check_error",
-        properties: { url: urlParam, error: "Forbidden redirect host" },
-      });
-      await posthog.shutdown();
-      return;
     }
 
     const result = {
@@ -84,10 +75,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       finalUrl: upstream.url,
       contentType: upstream.headers.get("content-type"),
     };
-    setSecurityHeaders(res);
-    res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=1800");
-    res.status(200).json(result);
-    await posthog.captureImmediate({
+
+    const headers = getSecurityHeaders();
+    headers.set("Cache-Control", "public, s-maxage=300, stale-while-revalidate=1800");
+
+    posthog.captureImmediate({
       distinctId,
       event: "api_link_checked",
       properties: {
@@ -97,17 +89,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         content_type: result.contentType,
       },
     });
+
+    return new Response(JSON.stringify(result), { status: 200, headers });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    setSecurityHeaders(res);
-    res.setHeader("Cache-Control", "no-store");
-    res.status(200).json({ ok: false, error: "Failed to check link", detail: message });
     posthog.captureException(error, distinctId, { url: urlParam });
-    await posthog.captureImmediate({
-      distinctId,
-      event: "api_link_check_error",
-      properties: { url: urlParam, error: message },
-    });
+    
+    return new Response(
+      JSON.stringify({ ok: false, error: "Failed to check link", detail: message }), 
+      { 
+        status: 200, 
+        headers: getSecurityHeaders() 
+      }
+    );
   }
-  await posthog.shutdown();
 }

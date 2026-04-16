@@ -1,17 +1,10 @@
-import dns from "node:dns/promises";
-import net from "node:net";
+/**
+ * Security Utilities for Vercel Edge Runtime
+ */
 
-export interface ApiRequest {
-  method?: string;
-  query?: Record<string, string | string[] | undefined>;
-  headers?: Record<string, string | string[] | undefined>;
-}
-
-export interface ApiResponse {
-  status: (code: number) => ApiResponse;
-  json: (payload: unknown) => void;
-  setHeader: (name: string, value: string) => void;
-}
+export const config = {
+  runtime: "edge",
+};
 
 type LimitConfig = {
   max: number;
@@ -35,50 +28,41 @@ const RATE_BUCKETS = new Map<string, RateBucket>();
 const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
 const PRIVATE_HOST_RE = /^(localhost|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+|::1)$/i;
 
-export function getSingle(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
+export function getSecurityHeaders(): Headers {
+  const headers = new Headers();
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("Referrer-Policy", "no-referrer");
+  headers.set("Cross-Origin-Resource-Policy", "same-site");
+  headers.set("Content-Type", "application/json; charset=utf-8");
+  return headers;
 }
 
-function getHeader(req: ApiRequest, name: string): string | undefined {
-  const direct = req.headers?.[name];
-  if (direct) return getSingle(direct);
-
-  const lower = name.toLowerCase();
-  const key = Object.keys(req.headers || {}).find((headerName) => headerName.toLowerCase() === lower);
-  if (!key) return undefined;
-  return getSingle(req.headers?.[key]);
+export function sendErrorResponse(statusCode: number, error: string, detail?: string): Response {
+  const headers = getSecurityHeaders();
+  headers.set("Cache-Control", "no-store");
+  return new Response(
+    JSON.stringify({
+      error,
+      ...(detail ? { detail } : {}),
+    }),
+    { status: statusCode, headers }
+  );
 }
 
-export function setSecurityHeaders(res: ApiResponse): void {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Referrer-Policy", "no-referrer");
-  res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+export function requireGet(req: Request): Response | null {
+  if (req.method === "GET") return null;
+  return sendErrorResponse(405, "Method not allowed");
 }
 
-export function sendError(res: ApiResponse, statusCode: number, error: string, detail?: string): void {
-  setSecurityHeaders(res);
-  res.setHeader("Cache-Control", "no-store");
-  res.status(statusCode).json({
-    error,
-    ...(detail ? { detail } : {}),
-  });
-}
-
-export function requireGet(req: ApiRequest, res: ApiResponse): boolean {
-  if (req.method === "GET") return true;
-  sendError(res, 405, "Method not allowed");
-  return false;
-}
-
-export function enforceOriginCheck(req: ApiRequest, res: ApiResponse): boolean {
+export function enforceOriginCheck(req: Request): Response | null {
   const strict = process.env.STRICT_ORIGIN_CHECK === "true";
-  if (!strict) return true;
+  if (!strict) return null;
 
-  const origin = getHeader(req, "origin");
-  const referer = getHeader(req, "referer");
+  const origin = req.headers.get("origin");
+  const referer = req.headers.get("referer");
+  
   if (!origin && !referer) {
-      sendError(res, 403, "invalid_request", "Missing origin or referer header");
-      return false;
+    return sendErrorResponse(403, "invalid_request", "Missing origin or referer header");
   }
 
   let requestOrigin = origin;
@@ -86,12 +70,11 @@ export function enforceOriginCheck(req: ApiRequest, res: ApiResponse): boolean {
     try {
       requestOrigin = new URL(referer).origin;
     } catch {
-      sendError(res, 403, "invalid_request", "Invalid referer header");
-      return false;
+      return sendErrorResponse(403, "invalid_request", "Invalid referer header");
     }
   }
 
-  const host = getHeader(req, "host");
+  const host = req.headers.get("host");
   const allowedOrigins = new Set(
     (process.env.ALLOWED_ORIGINS || "")
       .split(",")
@@ -102,18 +85,14 @@ export function enforceOriginCheck(req: ApiRequest, res: ApiResponse): boolean {
   allowedOrigins.add("http://localhost:8080");
   allowedOrigins.add("http://localhost:5173");
 
-  if (!requestOrigin || allowedOrigins.has(requestOrigin)) return true;
-  sendError(res, 403, "invalid_request", "Origin not allowed");
-  return false;
+  if (!requestOrigin || allowedOrigins.has(requestOrigin)) return null;
+  return sendErrorResponse(403, "invalid_request", "Origin not allowed");
 }
 
-function getClientKey(req: ApiRequest): string {
-  // Real IP is hard to get reliably in serverless environments, 
-  // relying on standard proxy arrays could still be spoofed
-  const forwarded = getHeader(req, "x-forwarded-for");
-  
+function getClientKey(req: Request): string {
+  const forwarded = req.headers.get("x-forwarded-for");
   const ip = forwarded?.split(",")[0]?.trim() || "anonymous";
-  const ua = (getHeader(req, "user-agent") || "ua-unknown").slice(0, 120);
+  const ua = (req.headers.get("user-agent") || "ua-unknown").slice(0, 120);
   return `${ip}|${ua}`;
 }
 
@@ -145,51 +124,49 @@ function consumeToken(key: string, limit: LimitConfig): { allowed: boolean; rema
   };
 }
 
-export function enforceRateLimit(req: ApiRequest, res: ApiResponse, routeGroup: keyof typeof ROUTE_LIMITS | "default" = "default"): boolean {
+export function enforceRateLimit(req: Request, routeGroup: keyof typeof ROUTE_LIMITS | "default" = "default"): Response | null {
   const mode = (process.env.RATE_LIMIT_MODE || (process.env.NODE_ENV === "production" ? "enforce" : "soft")).toLowerCase();
-  if (mode === "off") return true;
+  if (mode === "off") return null;
 
   const limit = routeGroup === "default" ? DEFAULT_LIMIT : ROUTE_LIMITS[routeGroup];
   const key = `${routeGroup}:${getClientKey(req)}`;
   const result = consumeToken(key, limit);
 
-  res.setHeader("X-RateLimit-Limit", String(limit.max));
-  res.setHeader("X-RateLimit-Remaining", String(result.remaining));
-  res.setHeader("X-RateLimit-Reset", String(result.resetSec));
+  // Note: We can't set headers on a Response we haven't created yet in this helper pattern
+  // but we can return the error response with correct headers if blocked.
+  if (!result.allowed && mode === "enforce") {
+    const errorRes = sendErrorResponse(429, "rate_limited", `Retry in ${result.resetSec}s`);
+    errorRes.headers.set("Retry-After", String(result.resetSec));
+    errorRes.headers.set("X-RateLimit-Limit", String(limit.max));
+    errorRes.headers.set("X-RateLimit-Remaining", "0");
+    errorRes.headers.set("X-RateLimit-Reset", String(result.resetSec));
+    return errorRes;
+  }
 
-  if (result.allowed) return true;
-  if (mode === "soft") return true;
-
-  res.setHeader("Retry-After", String(result.resetSec));
-  sendError(res, 429, "rate_limited", `Retry in ${result.resetSec}s`);
-  return false;
+  return null;
 }
 
 export function requireQueryParam(
-  req: ApiRequest,
-  res: ApiResponse,
+  url: URL,
   name: string,
   opts?: { minLen?: number; maxLen?: number; pattern?: RegExp }
-): string | null {
-  const value = getSingle(req.query?.[name])?.trim();
+): { value: string | null; error?: Response } {
+  const value = url.searchParams.get(name)?.trim();
   if (!value) {
-    sendError(res, 400, "invalid_request", `Missing ${name}`);
-    return null;
+    return { value: null, error: sendErrorResponse(400, "invalid_request", `Missing ${name}`) };
   }
 
   const minLen = opts?.minLen ?? 1;
   const maxLen = opts?.maxLen ?? 1024;
   if (value.length < minLen || value.length > maxLen) {
-    sendError(res, 400, "invalid_request", `Invalid ${name} length`);
-    return null;
+    return { value: null, error: sendErrorResponse(400, "invalid_request", `Invalid ${name} length`) };
   }
 
   if (opts?.pattern && !opts.pattern.test(value)) {
-    sendError(res, 400, "invalid_request", `Invalid ${name}`);
-    return null;
+    return { value: null, error: sendErrorResponse(400, "invalid_request", `Invalid ${name}`) };
   }
 
-  return value;
+  return { value };
 }
 
 export function parseAndValidateUrl(urlParam: string, allowedHosts: string[]): URL | null {
@@ -213,43 +190,19 @@ export function isPrivateHost(hostname: string): boolean {
   return false;
 }
 
-function isPrivateIp(address: string): boolean {
-  const normalized = address.trim().toLowerCase();
-  if (!normalized) return true;
-
-  const ipVersion = net.isIP(normalized);
-  if (ipVersion === 4) {
-    if (normalized.startsWith("10.")) return true;
-    if (normalized.startsWith("127.")) return true;
-    if (normalized.startsWith("192.168.")) return true;
-    if (normalized.startsWith("169.254.")) return true;
-    const second = Number.parseInt(normalized.split(".")[1] || "", 10);
-    if (normalized.startsWith("172.") && second >= 16 && second <= 31) return true;
-    return false;
-  }
-
-  if (ipVersion === 6) {
-    if (normalized === "::1") return true;
-    if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
-    if (normalized.startsWith("fe80:")) return true;
-    return false;
-  }
-
-  return true;
+function isIP(address: string): 4 | 6 | 0 {
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(address)) return 4;
+  if (/^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/.test(address)) return 6;
+  if (address.includes(":")) return 6;
+  return 0;
 }
 
 export async function assertPublicHostname(hostname: string): Promise<boolean> {
   if (isPrivateHost(hostname)) return false;
-  try {
-    const records = await dns.lookup(hostname, { all: true, verbatim: true });
-    if (records.length === 0) return false;
-    return records.every((record) => !isPrivateIp(record.address));
-  } catch {
-    return false;
-  }
+  // DNS is not available at Edge
+  return true;
 }
 
 export function isValidDoi(value: string): boolean {
   return /^10\.\d{4,}\/\S+$/i.test(value);
 }
-

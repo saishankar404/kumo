@@ -1,38 +1,37 @@
 import { createPostHogClient } from "./posthog";
 import {
-  type ApiRequest,
-  type ApiResponse,
   assertPublicHostname,
   enforceOriginCheck,
   enforceRateLimit,
-  getSingle,
+  getSecurityHeaders,
   parseAndValidateUrl,
   requireGet,
   requireQueryParam,
-  sendError,
-  setSecurityHeaders,
+  sendErrorResponse,
 } from "./_security";
 
-export default async function handler(req: ApiRequest, res: ApiResponse) {
-  if (!requireGet(req, res)) return;
-  if (!enforceOriginCheck(req, res)) return;
-  if (!enforceRateLimit(req, res, "search")) return;
-  setSecurityHeaders(res);
+export const config = {
+  runtime: "edge",
+};
 
-  const urlParam = requireQueryParam(req, res, "url", { maxLen: 2200 });
-  if (!urlParam) return;
+export default async function handler(req: Request): Promise<Response> {
+  const errorRes = requireGet(req) || enforceOriginCheck(req) || enforceRateLimit(req, "search");
+  if (errorRes) return errorRes;
+
+  const url = new URL(req.url);
+  const { value: urlParam, error: queryError } = requireQueryParam(url, "url", { maxLen: 2200 });
+  if (queryError) return queryError;
+  if (!urlParam) return sendErrorResponse(400, "invalid_request", "Missing url");
 
   const upstreamUrl = parseAndValidateUrl(urlParam, ["api.openalex.org"]);
   if (!upstreamUrl) {
-    sendError(res, 400, "invalid_request", "Invalid or forbidden upstream URL");
-    return;
+    return sendErrorResponse(400, "invalid_request", "Invalid or forbidden upstream URL");
   }
   if (!(await assertPublicHostname(upstreamUrl.hostname))) {
-    sendError(res, 400, "invalid_request", "Forbidden host");
-    return;
+    return sendErrorResponse(400, "invalid_request", "Forbidden host");
   }
 
-  const distinctId = getSingle(req.headers?.["x-posthog-distinct-id"]) ?? "anonymous";
+  const distinctId = req.headers.get("x-posthog-distinct-id") ?? "anonymous";
   const posthog = createPostHogClient();
   const query = upstreamUrl.searchParams.get("search") ?? upstreamUrl.searchParams.get("filter") ?? urlParam;
 
@@ -45,8 +44,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const text = await upstream.text();
     if (!upstream.ok) {
-      sendError(res, upstream.status, "Upstream openalex error", text.slice(0, 400));
-      await posthog.captureImmediate({
+      const resp = sendErrorResponse(upstream.status, "Upstream openalex error", text.slice(0, 400));
+      posthog.captureImmediate({
         distinctId,
         event: "api_search_error",
         properties: {
@@ -55,15 +54,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           status_code: upstream.status,
         },
       });
-      await posthog.shutdown();
-      return;
+      return resp;
     }
 
     const data = JSON.parse(text) as { meta?: { count?: number }; results?: unknown[] };
-    setSecurityHeaders(res);
-    res.setHeader("Cache-Control", "public, s-maxage=1800, stale-while-revalidate=21600");
-    res.status(200).json(data);
-    await posthog.captureImmediate({
+    const headers = getSecurityHeaders();
+    headers.set("Cache-Control", "public, s-maxage=1800, stale-while-revalidate=21600");
+
+    posthog.captureImmediate({
       distinctId,
       event: "api_search_requested",
       properties: {
@@ -72,10 +70,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         result_count: data.meta?.count ?? data.results?.length ?? 0,
       },
     });
+
+    return new Response(JSON.stringify(data), { status: 200, headers });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    sendError(res, 502, "Failed to resolve OpenAlex", message);
     posthog.captureException(error, distinctId, { source: "openalex", query });
+    return sendErrorResponse(502, "Failed to resolve OpenAlex", message);
   }
-  await posthog.shutdown();
 }

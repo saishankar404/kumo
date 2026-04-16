@@ -1,32 +1,32 @@
 import { createPostHogClient } from "./posthog";
 import {
-  type ApiRequest,
-  type ApiResponse,
   enforceOriginCheck,
   enforceRateLimit,
-  getSingle,
+  getSecurityHeaders,
   requireGet,
   requireQueryParam,
-  sendError,
-  setSecurityHeaders,
+  sendErrorResponse,
 } from "./_security";
 
-export default async function handler(req: ApiRequest, res: ApiResponse) {
-  if (!requireGet(req, res)) return;
-  if (!enforceOriginCheck(req, res)) return;
-  if (!enforceRateLimit(req, res, "search")) return;
-  setSecurityHeaders(res);
+export const config = {
+  runtime: "edge",
+};
 
-  const query = requireQueryParam(req, res, "query", { minLen: 2, maxLen: 400 });
-  if (!query) return;
+export default async function handler(req: Request): Promise<Response> {
+  const errorRes = requireGet(req) || enforceOriginCheck(req) || enforceRateLimit(req, "search");
+  if (errorRes) return errorRes;
+
+  const url = new URL(req.url);
+  const { value: query, error: queryError } = requireQueryParam(url, "query", { minLen: 2, maxLen: 400 });
+  if (queryError) return queryError;
+  if (!query) return sendErrorResponse(400, "invalid_request", "Missing query");
 
   const apiKey = process.env.CORE_API_KEY;
   if (!apiKey) {
-    sendError(res, 503, "CORE_API_KEY not configured");
-    return;
+    return sendErrorResponse(503, "CORE_API_KEY not configured");
   }
 
-  const distinctId = getSingle(req.headers?.["x-posthog-distinct-id"]) ?? "anonymous";
+  const distinctId = req.headers.get("x-posthog-distinct-id") ?? "anonymous";
   const posthog = createPostHogClient();
 
   const endpoint = `https://api.core.ac.uk/v3/search/works?q=${encodeURIComponent(query)}&limit=20`;
@@ -38,7 +38,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     });
     const text = await upstream.text();
     if (!upstream.ok) {
-      sendError(res, upstream.status, "Upstream CORE error", text.slice(0, 400));
+      const resp = sendErrorResponse(upstream.status, "Upstream CORE error", text.slice(0, 400));
       await posthog.captureImmediate({
         distinctId,
         event: "api_search_error",
@@ -48,14 +48,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           status_code: upstream.status,
         },
       });
-      await posthog.shutdown();
-      return;
+      return resp;
     }
     const data = JSON.parse(text) as { totalHits?: number; results?: unknown[] };
-    setSecurityHeaders(res);
-    res.setHeader("Cache-Control", "public, s-maxage=1800, stale-while-revalidate=7200");
-    res.status(200).json(data);
-    await posthog.captureImmediate({
+    const headers = getSecurityHeaders();
+    headers.set("Cache-Control", "public, s-maxage=1800, stale-while-revalidate=7200");
+    
+    // Non-blocking capture
+    posthog.captureImmediate({
       distinctId,
       event: "api_search_requested",
       properties: {
@@ -64,10 +64,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         result_count: data.totalHits ?? data.results?.length ?? 0,
       },
     });
+
+    return new Response(JSON.stringify(data), { status: 200, headers });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    sendError(res, 502, "Failed to resolve CORE", message);
     posthog.captureException(error, distinctId, { source: "core", query });
+    return sendErrorResponse(502, "Failed to resolve CORE", message);
   }
-  await posthog.shutdown();
 }
