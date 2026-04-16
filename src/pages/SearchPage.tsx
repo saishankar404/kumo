@@ -833,7 +833,7 @@ const openAccessOnly = isOpenAccessOnly(state);
   useEffect(() => {
     const mm = gsap.matchMedia();
 
-    mm.add("(prefers-reduced-motion: no-preference)", () => {
+    mm.add("(prefers-reduced-motion: no-preference) and (min-width: 1024px)", () => {
       const items = gsap.utils.toArray<HTMLElement>(".fp-feed-item");
       const animations = items.map((item) =>
         gsap.from(item, {
