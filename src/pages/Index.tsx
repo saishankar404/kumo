@@ -1003,13 +1003,17 @@ const Index = () => {
                   />
 
                   <div className="pointer-events-none absolute right-5 top-0 h-full z-10 flex items-center pr-5 md:hidden">
-                    {query ? (
+                    {searchMode === "inline" && query ? (
                       <motion.button
                         type="submit"
                         initial={{ opacity: 0, scale: 0.5 }}
                         animate={{ opacity: 1, scale: 1 }}
                         whileTap={{ scale: 0.9 }}
                         className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-900 text-white shadow-lg"
+                        onClick={() => {
+                          inlineInputRef.current?.blur();
+                          dialogInputRef.current?.blur();
+                        }}
                       >
                         <HugeiconsIcon icon={ArrowRight01Icon} size={18} strokeWidth={2.5} />
                       </motion.button>
@@ -1191,23 +1195,41 @@ const Index = () => {
                     </form>
 
                     <AnimatePresence>
-                      {query ? (
-                        <motion.button
-                          type="button"
-                          onClick={handleClear}
-                          className={false
-                            ? "absolute inset-y-0 right-3 z-10 flex items-center justify-center rounded-full p-2 text-stone-700/55 hover:bg-stone-900/10 hover:text-stone-900"
-                            : "absolute inset-y-0 right-3 z-10 flex items-center justify-center rounded-full p-2 text-white/40 hover:bg-white/10 hover:text-white/70"
-                          }
-                          initial={{ opacity: 0, scale: 0.5 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.5 }}
-                          transition={springs.snappy}
-                          whileTap={{ scale: 0.9 }}
-                        >
-                          <HugeiconsIcon icon={Cancel01Icon} size={22} strokeWidth={1.5} />
-                        </motion.button>
-                      ) : null}
+                      {query && (
+                        <>
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.5 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.5 }}
+                            transition={springs.snappy}
+                            className="absolute inset-y-0 right-3 z-10 flex items-center md:hidden"
+                          >
+                            <motion.button
+                              type="submit"
+                              whileTap={{ scale: 0.9 }}
+                              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white shadow-lg"
+                              onClick={() => {
+                                inlineInputRef.current?.blur();
+                                dialogInputRef.current?.blur();
+                              }}
+                            >
+                              <HugeiconsIcon icon={ArrowRight01Icon} size={18} strokeWidth={2.5} />
+                            </motion.button>
+                          </motion.div>
+                          <motion.button
+                            type="button"
+                            onClick={handleClear}
+                            className="absolute inset-y-0 right-3 z-10 hidden items-center justify-center rounded-full p-2 text-white/40 hover:bg-white/10 hover:text-white/70 md:flex"
+                            initial={{ opacity: 0, scale: 0.5 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.5 }}
+                            transition={springs.snappy}
+                            whileTap={{ scale: 0.9 }}
+                          >
+                            <HugeiconsIcon icon={Cancel01Icon} size={22} strokeWidth={1.5} />
+                          </motion.button>
+                        </>
+                      )}
                     </AnimatePresence>
                   </motion.div>
 
