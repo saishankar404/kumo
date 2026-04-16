@@ -244,8 +244,21 @@ const toneForCitations = (citations?: number) => {
 
 const highlightAbstract = (text: string, query: string) => {
   if (!text) return "No abstract available.";
-  if (!query.trim()) return text;
-  return highlightAbstractRaw(text, query);
+  
+  // Basic crude sanitization as DOMPurify isn't installed
+  const sanitize = (str: string) => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
+  const safeText = sanitize(text);
+  if (!query.trim()) return safeText;
+  
+  return highlightAbstractRaw(safeText, sanitize(query));
 };
 
 const toDoiUrl = (doi?: string) => (doi ? `https://doi.org/${doi}` : undefined);

@@ -76,7 +76,10 @@ export function enforceOriginCheck(req: ApiRequest, res: ApiResponse): boolean {
 
   const origin = getHeader(req, "origin");
   const referer = getHeader(req, "referer");
-  if (!origin && !referer) return true;
+  if (!origin && !referer) {
+      sendError(res, 403, "invalid_request", "Missing origin or referer header");
+      return false;
+  }
 
   let requestOrigin = origin;
   if (!requestOrigin && referer) {
@@ -105,10 +108,11 @@ export function enforceOriginCheck(req: ApiRequest, res: ApiResponse): boolean {
 }
 
 function getClientKey(req: ApiRequest): string {
+  // Real IP is hard to get reliably in serverless environments, 
+  // relying on standard proxy arrays could still be spoofed
   const forwarded = getHeader(req, "x-forwarded-for");
-  const realIp = getHeader(req, "x-real-ip");
-  const cfIp = getHeader(req, "cf-connecting-ip");
-  const ip = forwarded?.split(",")[0]?.trim() || realIp || cfIp || "anonymous";
+  
+  const ip = forwarded?.split(",")[0]?.trim() || "anonymous";
   const ua = (getHeader(req, "user-agent") || "ua-unknown").slice(0, 120);
   return `${ip}|${ua}`;
 }

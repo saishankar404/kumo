@@ -42,21 +42,32 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const posthog = createPostHogClient();
 
   try {
-    let upstream = await fetch(target.toString(), {
+    const upstream = await fetch(target.toString(), {
       method: "HEAD",
-      redirect: "follow",
+      redirect: "manual",
     });
 
     if (upstream.status === 405 || upstream.status === 403) {
       upstream = await fetch(target.toString(), {
         method: "GET",
         headers: { Range: "bytes=0-0" },
-        redirect: "follow",
+        redirect: "manual",
       });
     }
 
-    const finalUrl = upstream.url ? new URL(upstream.url) : target;
-    if (!(await assertPublicHostname(finalUrl.hostname))) {
+    if (upstream.status >= 300 && upstream.status < 400 && upstream.headers.has("location")) {
+      const redirectUrl = new URL(upstream.headers.get("location")!, target);
+      if (!(await assertPublicHostname(redirectUrl.hostname))) {
+        sendError(res, 400, "invalid_request", "Forbidden redirect host");
+        await posthog.captureImmediate({
+          distinctId,
+          event: "api_link_check_error",
+          properties: { url: urlParam, error: "Forbidden redirect host" },
+        });
+        await posthog.shutdown();
+        return;
+      }
+    }
       sendError(res, 400, "invalid_request", "Forbidden redirect host");
       await posthog.captureImmediate({
         distinctId,
