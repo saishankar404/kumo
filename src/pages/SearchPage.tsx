@@ -830,31 +830,30 @@ const openAccessOnly = isOpenAccessOnly(state);
     );
   }, [tipsOpen]);
 
-  useEffect(() => {
-    const mm = gsap.matchMedia();
-
-    mm.add("(prefers-reduced-motion: no-preference) and (min-width: 1024px)", () => {
-      const items = gsap.utils.toArray<HTMLElement>(".fp-feed-item");
-      const animations = items.map((item) =>
-        gsap.from(item, {
-          y: 20,
-          opacity: 0,
-          duration: 0.42,
-          ease: "power2.out",
-          scrollTrigger: {
-            trigger: item,
-            start: "top 95%",
-            toggleActions: "play none none none",
-          },
-        }),
-      );
-      return () => {
-        animations.forEach((anim) => anim.kill());
-      };
-    });
-
-    return () => mm.revert();
-  }, [visibleRows.length, loading]);
+  // Disabled: ResultsTransition handles entrance animations - ScrollTrigger was causing whitespace issues on desktop
+  // useEffect(() => {
+  //   const mm = gsap.matchMedia();
+  //   mm.add("(prefers-reduced-motion: no-preference) and (min-width: 1024px)", () => {
+  //     const items = gsap.utils.toArray<HTMLElement>(".fp-feed-item");
+  //     const animations = items.map((item) =>
+  //       gsap.from(item, {
+  //         y: 20,
+  //         opacity: 0,
+  //         duration: 0.42,
+  //         ease: "power2.out",
+  //         scrollTrigger: {
+  //           trigger: item,
+  //           start: "top 95%",
+  //           toggleActions: "play none none none",
+  //         },
+  //       }),
+  //     );
+  //     return () => {
+  //       animations.forEach((anim) => anim.kill());
+  //     };
+  //   });
+  //   return () => mm.revert();
+  // }, [visibleRows.length, loading]);
 
   useEffect(() => {
     const sourceMenu = sourceDropdownMenuRef.current;
