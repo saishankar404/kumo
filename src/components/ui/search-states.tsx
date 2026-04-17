@@ -541,11 +541,10 @@ export function ResultsTransition({ results, loading, children }: ResultsTransit
         if (!items || items.length === 0) return;
 
         gsap.fromTo(items,
-          { opacity: 0, y: 16, scale: 0.98 },
+          { opacity: 0, y: 16 },
           { 
             opacity: 1, 
             y: 0, 
-            scale: 1,
             duration: 0.4, 
             stagger: 0.06, 
             ease: "power2.out" 
