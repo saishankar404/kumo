@@ -13,7 +13,7 @@ import {
   ResultsTransition,
 } from "@/components/ui/search-states";
 import MobileNav from "@/components/MobileNav";
-import { highlightAbstract as highlightAbstractRaw } from "@/lib/highlight";
+import { findHighlightMatches } from "@/lib/highlight";
 import { getRecentSearches, addToSearchHistory, clearSearchHistory, type SearchHistoryEntry } from "@/lib/search-history";
 import { getAllFilterPresets, createFilterPreset, deleteFilterPreset, type FilterPreset } from "@/lib/filter-presets";
 import { capturePDFDownload, captureSearchResultClick, captureLoadMore, captureFilterChange } from "@/lib/posthog-client";
@@ -242,24 +242,32 @@ const toneForCitations = (citations?: number) => {
   return "cited";
 };
 
-const highlightAbstract = (text: string, query: string) => {
-  if (!text) return "No abstract available.";
+const HighlightedAbstract = ({ text, query }: { text: string; query: string }) => {
+  if (!text) return <TextSpan>No abstract available.</TextSpan>;
+  if (!query.trim()) return <TextSpan>{text}</TextSpan>;
   
-  // Basic crude sanitization as DOMPurify isn't installed
-  const sanitize = (str: string) => {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  };
+  const matches = findHighlightMatches(text, query);
+  if (matches.length === 0) return <TextSpan>{text}</TextSpan>;
 
-  const safeText = sanitize(text);
-  if (!query.trim()) return safeText;
-  
-  return highlightAbstractRaw(safeText, sanitize(query));
+  const nodes = [];
+  let lastEnd = 0;
+  matches.forEach((match, i) => {
+    if (match.start > lastEnd) {
+      nodes.push(<span key={`t-${i}`}>{text.substring(lastEnd, match.start)}</span>);
+    }
+    nodes.push(<mark key={`m-${i}`} className="highlight-match">{match.text}</mark>);
+    lastEnd = match.end;
+  });
+
+  if (lastEnd < text.length) {
+    nodes.push(<span key="end">{text.substring(lastEnd)}</span>);
+  }
+
+  return <>{nodes}</>;
 };
+
+// Helper inside the file
+const TextSpan = ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
 const toDoiUrl = (doi?: string) => (doi ? `https://doi.org/${doi}` : undefined);
 const SearchPage = () => {
@@ -2387,10 +2395,9 @@ isRetrying={loading}
 
                       <div className="cell-abstract border-t border-gray-100 pt-3">
                         <div className="abstract-wrap relative mt-0.5 overflow-hidden">
-                          <div
-                            className={`abstract-text m-0 pr-2 text-[14px] leading-[1.68] text-gray-600 ${expanded ? "" : "line-clamp-2"}`}
-                            dangerouslySetInnerHTML={{ __html: highlightAbstract(paper.abstract || "No abstract available.", state.q) }}
-                          />
+                            <div className={`abstract-text m-0 pr-2 text-[14px] leading-[1.68] text-gray-600 ${expanded ? "" : "line-clamp-2"}`}>
+                              <HighlightedAbstract text={paper.abstract || "No abstract available."} query={state.q} />
+                            </div>
                         </div>
                       </div>
 

@@ -26,7 +26,7 @@ const ROUTE_LIMITS: Record<string, LimitConfig> = {
 
 const RATE_BUCKETS = new Map<string, RateBucket>();
 const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
-const PRIVATE_HOST_RE = /^(localhost|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+|::1)$/i;
+const PRIVATE_HOST_RE = /^(localhost|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+|169\.254\.\d+\.\d+|::1|[fF][eE]80::.*)$/i;
 
 export function getSecurityHeaders(): Headers {
   const headers = new Headers();
