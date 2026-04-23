@@ -513,6 +513,7 @@ const openAccessOnly = isOpenAccessOnly(state);
     }
 
     // Reset buffer at start of each search
+    resultsBufferRef.current = [];
     setResultsBuffer([]);
     setCollectionComplete(false);
     
