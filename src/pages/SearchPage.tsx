@@ -75,36 +75,127 @@ const mergeResultsByDoi = (results: NormalizedPaperResult[]): NormalizedPaperRes
   return merged;
 };
 
-const SOURCE_QUALITY_WEIGHTS: Record<string, number> = {
-  "semantic-scholar": 4,
-  "openalex": 3,
-  "arxiv": 2,
-  "biorxiv-medrxiv": 1,
+// Venue boost: regex for multi-word patterns + short but high-value venue tokens.
+// Single-word journals that could false-positive as substrings live in the exact-match set.
+const ELITE_VENUES_RE = /\b(nature communications|nature medicine|nature methods|nature biotechnology|nature genetics|nature neuroscience|neurips|nips|iclr|icml|cvpr|iccv|eccv|acl|emnlp|naacl|lancet|new england journal|jama|chi|siggraph|physical review|ieee transactions|acm transactions|proceedings of the national academy)\b/;
+const ELITE_VENUE_EXACT = new Set(["nature", "science", "cell"]);
+
+const calculateMedianCitations = (results: NormalizedPaperResult[]): number => {
+  const citations = results.map(r => r.citations || 0).sort((a, b) => a - b);
+  if (citations.length === 0) return 0;
+  const mid = Math.floor(citations.length / 2);
+  return citations.length % 2 !== 0 ? citations[mid] : (citations[mid - 1] + citations[mid]) / 2;
 };
+
+const normalizeString = (str?: string) => (str || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").trim();
 
 const rankByQualityRecencyCitations = (results: NormalizedPaperResult[]): NormalizedPaperResult[] => {
   const currentYear = new Date().getFullYear();
-  const recentThreshold = currentYear - 3;
-  
-  return [...results].sort((a, b) => {
-    // Quality score (source preference)
-    const sourceScoreA = Math.max(...a.foundIn.map(s => SOURCE_QUALITY_WEIGHTS[s] || 1));
-    const sourceScoreB = Math.max(...b.foundIn.map(s => SOURCE_QUALITY_WEIGHTS[s] || 1));
-    if (sourceScoreA !== sourceScoreB) return sourceScoreB - sourceScoreA;
-    
-    // Recency boost (last 3 years)
-    const recentA = (a.year || 0) >= recentThreshold ? 1 : 0;
-    const recentB = (b.year || 0) >= recentThreshold ? 1 : 0;
-    if (recentA !== recentB) return recentB - recentA;
-    
-    // Citation count
-    const citationsA = a.citations || 0;
-    const citationsB = b.citations || 0;
-    if (citationsA !== citationsB) return citationsB - citationsA;
-    
-    // Fallback to relevance
-    return (b.relevanceScore || 0) - (a.relevanceScore || 0);
+
+  // Bug 8 fix: Exclude zero-citation papers from median to avoid the floor of 10
+  // distorting normalization when most papers lack citation data (preprints, arXiv).
+  const papersWithCitations = results.filter(r => (r.citations || 0) > 0);
+  const safeMedianCitations = Math.max(1, papersWithCitations.length > 0 ? calculateMedianCitations(papersWithCitations) : 1);
+
+  // Pass 1: Absolute Scoring
+  const scoredPapers = results.map(paper => {
+    const age = Math.max(0, currentYear - (paper.year || currentYear));
+    const citations = paper.citations || 0;
+
+    // 1. Citation Impact — field-normalized log scale
+    const normalizedCitations = citations / safeMedianCitations;
+    const baseImpact = Math.log10(normalizedCitations + 1);
+
+    // 2. Non-Linear & Smoothly Adaptive Velocity
+    // Bug 2 fix: +2 instead of +1 smooths the 2.3x cliff at the year boundary.
+    // age=0 → divisor=2^1.2≈2.3, age=1 → divisor=3^1.2≈3.7 (ratio 1.6x vs old 2.3x)
+    const velocity = citations / Math.pow(age + 2, 1.2);
+    const velocityImpact = Math.log10(velocity + 1);
+    const velocityWeight = 0.4 + (0.4 * Math.exp(-0.3 * age));
+
+    // 3. Relevance — inputs are now pre-normalized to [0, 1] per-source (Bugs 1/4 fix).
+    // No log squashing needed; direct linear use with weight 3.0 to match prior contribution range.
+    const squashedRelevance = paper.relevanceScore || 0;
+
+    // 4. Robust Venue Signal (Bug 10 fix: uses longer unambiguous patterns)
+    const normVenue = normalizeString(paper.venue);
+    const venueBonus = (normVenue && (ELITE_VENUES_RE.test(normVenue) || ELITE_VENUE_EXACT.has(normVenue))) ? 1.2 : 1.0;
+
+    // 5. Capped Cross-Index Authority & Soft Recency
+    const crossIndexBonus = Math.min(1.3, 1 + (0.15 * Math.max(0, paper.sourceKeys.length - 1)));
+    const recencyDecay = Math.exp(-0.15 * age);
+    const blendedRecency = 0.5 + (0.5 * recencyDecay);
+    const oaBonus = paper.pdfAvailable ? 1.05 : 1.0;
+
+    // Bug 7 fix: Floor at 0.1 prevents zero-score collapse for DOI lookups and papers
+    // with no citations + no relevance data, which previously scored exactly 0.
+    const rawScore = Math.max(0.1, (squashedRelevance * 3.0) + baseImpact + (velocityWeight * velocityImpact));
+    const finalScore = rawScore * blendedRecency * venueBonus * crossIndexBonus * oaBonus;
+
+    const normConcepts = (paper.concepts || []).map(normalizeString).filter(Boolean);
+
+    return { 
+      paper, 
+      score: finalScore, 
+      originalScore: finalScore, // preserved for MMR floor
+      age, 
+      year: paper.year || currentYear,
+      normVenue,
+      normConcepts
+    };
   });
+
+  // Bug 14 fix: Sort ascending so we can pop() from the end in O(1) instead of
+  // shift() from the front in O(n). Same semantics, avoids hidden O(n²) from shifts.
+  // Bug 11 fix: Deterministic tie-breaker by paper ID prevents non-deterministic ranking.
+  scoredPapers.sort((a, b) => a.score - b.score || b.paper.id.localeCompare(a.paper.id));
+
+  // Pass 2: Position-Aware Multi-Axis MMR — O(n² log n) due to re-sort; fine for ≤200 papers.
+  // For larger sets, replace with a binary-heap selection.
+  const ranked: NormalizedPaperResult[] = [];
+
+
+  while (scoredPapers.length > 0) {
+    const current = scoredPapers.pop()!; // Bug 14: O(1) pop from sorted-ascending end
+    ranked.push(current.paper);
+
+    // Bug 3 fix: Smooth linear ramp (0.3 → 1.0 over 5 placements) instead of
+    // a hard step at position 3 that doubled penalty strength instantly.
+    const rankFactor = Math.min(1.0, 0.3 + ranked.length * 0.14);
+
+    const currentConceptSet = new Set(current.normConcepts);
+
+    // Apply penalties to remaining papers
+    for (let i = 0; i < scoredPapers.length; i++) {
+      const candidate = scoredPapers[i];
+      let totalPenalty = 1.0;
+
+      // Temporal penalty
+      if (candidate.year === current.year) totalPenalty *= 0.95;
+      
+      // Venue penalty
+      if (current.normVenue && candidate.normVenue === current.normVenue) totalPenalty *= 0.97;
+      
+      // Semantic penalty
+      if (currentConceptSet.size > 0 && candidate.normConcepts.length > 0) {
+        const overlap = candidate.normConcepts.filter(c => currentConceptSet.has(c)).length;
+        if (overlap > 0) {
+           const semanticPenalty = Math.max(0.85, 1 - (0.02 * overlap));
+           totalPenalty *= semanticPenalty;
+        }
+      }
+
+      // Apply dampening with floor: never reduce below 20% of original score
+      const appliedPenalty = 1 - ((1 - totalPenalty) * rankFactor);
+      candidate.score = Math.max(candidate.originalScore * 0.2, candidate.score * appliedPenalty);
+    }
+
+    // Re-sort remaining papers (ascending for pop)
+    // Bug 11: deterministic tie-breaker
+    scoredPapers.sort((a, b) => a.score - b.score || b.paper.id.localeCompare(a.paper.id));
+  }
+
+  return ranked;
 };
 
 const YEAR_OPTIONS = [

@@ -581,7 +581,7 @@ function mapOpenAlexWork(item: OpenAlexWork, source: SourceKey): NormalizedPaper
     pdfOptions,
     oaStatus: item.open_access?.is_oa ? "open" : "closed",
     landingUrl: item.primary_location?.landing_page_url || item.id,
-    relevanceScore: item.relevance_score || item.cited_by_count || 0,
+    relevanceScore: item.relevance_score || 0,
     openAlexId: item.id?.includes("openalex.org/") ? item.id : undefined,
     concepts,
   };
@@ -637,6 +637,7 @@ const openAlexAdapter: SourceAdapter = {
       const item = await fetchOpenAlex<OpenAlexWork>(endpoint, ctx.signal);
       if (!item) return [];
       const row = mapOpenAlexWork(item, "openalex");
+      row.relevanceScore = 1.0; // DOI exact-match → maximum relevance
 
       const unpaywall = row.doi ? await resolveUnpaywall(row.doi, ctx.signal) : null;
       if (unpaywall && !row.pdfOptions.some((option) => option.url === unpaywall.url)) {
@@ -676,6 +677,10 @@ const openAlexAdapter: SourceAdapter = {
     const payload = await fetchOpenAlex<{ results?: OpenAlexWork[] }>(endpoint, ctx.signal);
     if (!payload) return [];
     const rows = (payload?.results || []).map((item) => mapOpenAlexWork(item, "openalex"));
+
+    // Batch-normalize BM25 relevance scores to [0, 1]
+    const maxRelevance = Math.max(1, ...rows.map(r => r.relevanceScore));
+    rows.forEach(r => { r.relevanceScore = r.relevanceScore / maxRelevance; });
 
     await Promise.all(
       rows.map(async (row) => {
@@ -762,7 +767,7 @@ const arxivAdapter: SourceAdapter = {
         pdfOptions,
         oaStatus: pdfOptions.length > 0 ? "open" : "unknown",
         landingUrl: landing || id,
-        relevanceScore: entries.length - index,
+        relevanceScore: entries.length > 0 ? (entries.length - index) / entries.length : 0,
         concepts: [],
       } as NormalizedPaperResult;
     });
@@ -822,7 +827,7 @@ const biorxivAdapter: SourceAdapter = {
           : [],
         oaStatus: pdfUrl ? "open" : "unknown",
         landingUrl,
-        relevanceScore: rows.length - index,
+        relevanceScore: rows.length > 0 ? (rows.length - index) / rows.length : 0,
         concepts: [],
       } as NormalizedPaperResult;
     });
@@ -881,7 +886,7 @@ const pmcAdapter: SourceAdapter = {
           : [],
         oaStatus: pdfUrl ? "open" : "unknown",
         landingUrl,
-        relevanceScore: rows.length - index,
+        relevanceScore: rows.length > 0 ? (rows.length - index) / rows.length : 0,
         concepts: [],
       } as NormalizedPaperResult;
     });
@@ -932,7 +937,7 @@ const semanticScholarAdapter: SourceAdapter = {
           : [],
         oaStatus: pdfUrl ? "open" : "unknown",
         landingUrl: item.url || (doi ? `https://doi.org/${doi}` : undefined),
-        relevanceScore: rows.length - index,
+        relevanceScore: rows.length > 0 ? (rows.length - index) / rows.length : 0,
         concepts: [],
       } as NormalizedPaperResult;
     });
@@ -988,7 +993,7 @@ const coreAdapter: SourceAdapter = {
           : [],
         oaStatus: pdfUrl ? "open" : "unknown",
         landingUrl,
-        relevanceScore: rows.length - index,
+        relevanceScore: rows.length > 0 ? (rows.length - index) / rows.length : 0,
         concepts: [],
       } as NormalizedPaperResult;
     });
@@ -1034,7 +1039,7 @@ const zenodoAdapter: SourceAdapter = {
         pdfOptions: [],
         oaStatus: "unknown",
         landingUrl,
-        relevanceScore: rows.length - index,
+        relevanceScore: rows.length > 0 ? (rows.length - index) / rows.length : 0,
         concepts: [],
       } as NormalizedPaperResult;
     });
