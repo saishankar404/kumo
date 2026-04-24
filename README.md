@@ -14,6 +14,12 @@ kumo acts as a gateway to the world of research. it connects natively with open 
 - minimalist design crafted with satoshi and gt walsheim typography.
 - built-in security layers to handle rate limiting and origin protection.
 
+## how ranking works
+
+kumo doesn't just return API results in whatever order they arrive. it runs a multi-signal ranking algorithm called AIVS that normalizes relevance scores across all seven sources, combines them with citation impact, velocity, recency, and venue prestige signals, then applies MMR diversification to prevent result clustering.
+
+the full technical breakdown — including the scoring formula, normalization strategy, design rationale, and known limitations — is documented in **[RANKING.md](RANKING.md)**.
+
 ## getting started
 
 you can get kumo running locally in just a few minutes. make sure you have pnpm installed on your machine.
