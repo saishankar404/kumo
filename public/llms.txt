@@ -1,0 +1,36 @@
+# Kumo - Open Research Engine
+
+## Site Description
+Kumo is a free, open-source research paper search engine that helps researchers, students, and academics find and access academic papers without paywalls. It searches across multiple open-access sources including arXiv, CORE, Unpaywall, OpenAlex, Semantic Scholar, and Zenodo.
+
+## Key Features
+- Search by DOI, title, author, or keyword
+- Direct PDF links to open-access versions
+- Client-side only - no accounts, no tracking, no data collection
+- Fast, modern interface with keyboard shortcuts (⌘K)
+- Completely free and open source
+
+## Use Cases
+- Researchers looking for papers in AI/ML, biology, physics, etc.
+- Students needing academic papers for assignments
+- Academics wanting quick access to open-access versions
+- Anyone who hates paywalls and wants free access to knowledge
+
+## Tech Stack
+- Built with React, TypeScript, Vite
+- Powered by open APIs: OpenAlex, Unpaywall, arXiv, CORE, Semantic Scholar
+- Deployed on Vercel
+
+## Pages
+- Home: https://kumo.saishankar.xyz/
+- About: https://kumo.saishankar.xyz/about
+- Contact: https://kumo.saishankar.xyz/contact
+- Privacy: https://kumo.saishankar.xyz/privacy
+- Search: https://kumo.saishankar.xyz/search
+
+## Contact
+- GitHub: https://github.com/saishankar404/kumo
+- Email: saishankar@example.com
+
+## Pricing
+Free and open source. No accounts required. No hidden costs.
