@@ -10,15 +10,6 @@
       ]
     }
   ],
-  "prerender": {
-    "fallback": "empty",
-    "routes": [
-      "/",
-      "/about",
-      "/contact",
-      "/privacy"
-    ]
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",
