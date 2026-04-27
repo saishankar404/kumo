@@ -1115,11 +1115,9 @@ const Index = () => {
           animate="visible"
           {...animationProps}
         >
-          <motion.span
-            className="text-sm font-medium tracking-wide text-white/40"
+          <motion.div
+            className="text-sm font-medium tracking-wide text-white/40 flex items-center justify-center gap-4"
             style={{ fontFamily: fontStack }}
-            whileHover={prefersReducedMotion ? {} : { color: "rgba(255,255,255,0.7)" }}
-            transition={{ duration: 0.2 }}
           >
             <a
               href="https://www.linkedin.com/in/sai-shankar101/"
@@ -1129,7 +1127,21 @@ const Index = () => {
             >
               crafted by @saishankar404
             </a>
-          </motion.span>
+            <span className="text-white/20">·</span>
+            <a
+              href="/contact"
+              className="text-[1.1em] transition-all duration-300 hover:text-amber-500 hover:scale-105 inline-block"
+            >
+              contact
+            </a>
+            <span className="text-white/20">·</span>
+            <a
+              href="/privacy"
+              className="text-[1.1em] transition-all duration-300 hover:text-amber-500 hover:scale-105 inline-block"
+            >
+              privacy
+            </a>
+          </motion.div>
         </motion.footer>
 
         <AnimatePresence

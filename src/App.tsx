@@ -11,6 +11,8 @@ import NotFound from "./pages/NotFound.tsx";
 import SearchPage from "./pages/SearchPage.tsx";
 import InternalMetrics from "./pages/InternalMetrics.tsx";
 import About from "./pages/About.tsx";
+import Contact from "./pages/Contact.tsx";
+import Privacy from "./pages/Privacy.tsx";
 import { initPostHog, capturePageView } from "./lib/posthog-client";
 import TypewriterLoader from "./components/TypewriterLoader";
 
@@ -80,6 +82,8 @@ const RouteTransitionLayer = () => {
         <Routes location={displayLocation}>
           <Route path="/" element={<Index />} />
           <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/internal/metrics" element={<InternalMetrics />} />
 
